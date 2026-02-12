@@ -39,7 +39,6 @@ public class PlayerLobbyInfo : NetworkBehaviour
 
     private void UpdateUI()
     {
-        // Find and update our UI element
         LobbyUIManager lobbyUI = FindObjectOfType<LobbyUIManager>();
         if (lobbyUI != null)
         {
