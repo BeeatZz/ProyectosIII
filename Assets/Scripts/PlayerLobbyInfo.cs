@@ -14,7 +14,6 @@ public class PlayerLobbyInfo : NetworkBehaviour
     {
         base.OnStartLocalPlayer();
 
-        // Send our Steam info to the server
         CmdSetSteamInfo(SteamUser.GetSteamID().m_SteamID, SteamFriends.GetPersonaName());
     }
 
