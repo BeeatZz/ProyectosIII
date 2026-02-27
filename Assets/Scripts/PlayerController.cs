@@ -3,15 +3,13 @@ using UnityEngine.InputSystem;
 using Mirror;
 
 /// <summary>
-/// Server-authoritative FPS controller for Mirror.
+/// Client-authoritative FPS controller for Mirror.
 ///
 /// Design:
-///   LOCAL PLAYER   — reads input, runs movement locally for immediate response
-///                    (client prediction), then sends inputs to the server.
-///   SERVER         — re-simulates movement from received inputs and writes the
-///                    authoritative result into SyncVars.
-///   REMOTE CLIENTS — interpolate toward SyncVar values; CharacterController
-///                    is disabled because they are never simulated locally.
+///   LOCAL PLAYER   — reads input, runs movement locally for immediate response,
+///                    then sends position to the server.
+///   SERVER         — accepts client positions and writes them into SyncVars.
+///   REMOTE CLIENTS — interpolate toward SyncVar values.
 ///
 /// Setup checklist:
 ///   • Attach CharacterController, NetworkIdentity, PlayerInput to this GameObject.
@@ -86,7 +84,7 @@ public class PlayerController : NetworkBehaviour
 
     // ─── Simulation state ──────────────────────────────────────────────────────
 
-    private float _yVel;           // vertical velocity (m/s), positive = downward
+    private float _yVel;           // vertical velocity (m/s), positive = upward
     private float _pitch;          // camera pitch in degrees, local only
     private float _capsuleHeight;  // current lerped capsule height, all clients
 
@@ -106,9 +104,7 @@ public class PlayerController : NetworkBehaviour
         _capsuleHeight = standHeight;
 
         // Set correct height and center immediately so the CharacterController
-        // never overlaps with the ground on the first frame. If center stays at
-        // (0,0,0) — the Unity default — the lower half of the capsule is buried
-        // and the physics solver ejects the player upward on the very first tick.
+        // never overlaps with the ground on the first frame.
         _cc.height = _capsuleHeight;
         _cc.center = new Vector3(0f, _capsuleHeight * 0.5f, 0f);
     }
@@ -123,8 +119,6 @@ public class PlayerController : NetworkBehaviour
         _spawnFrame = Time.frameCount;
 
         // Push the CC downward slightly on spawn so it registers as grounded
-        // on the very first frame. Without this, isGrounded=false on frame 1
-        // and the grounding clamp never fires.
         _cc.Move(Vector3.down * 0.1f);
 
         SpawnCamera();
@@ -134,8 +128,7 @@ public class PlayerController : NetworkBehaviour
     /// <summary>Called on every client (including non-owners).</summary>
     public override void OnStartClient()
     {
-        if (!isLocalPlayer)
-            _cc.enabled = false;   // remote players: driven by SyncVars only
+        // Keep CharacterController enabled on all clients for client-authoritative movement
     }
 
     void OnDestroy()
@@ -241,8 +234,7 @@ public class PlayerController : NetworkBehaviour
 
     void LocalUpdate()
     {
-        // Unlock input after 3 frames — suppresses spurious callbacks that fire
-        // immediately on action.Enable() (e.g. a held jump key at spawn time).
+        // Unlock input after 3 frames
         if (!_inputReady)
         {
             if (Time.frameCount >= _spawnFrame + 3)
@@ -255,24 +247,20 @@ public class PlayerController : NetworkBehaviour
         UpdateCapsuleHeight(_crouching);
         Simulate(_moveInput, _jumpQueued, _crouching, _sprinting, ref _yVel);
 
-        // Capture jump flag BEFORE clearing it so the Command can carry it
-        bool jumpThisTick = _jumpQueued;
         _jumpQueued = false;
 
-        // On a listen-server (host) Simulate() already ran above with full
-        // authority — write SyncVars directly to skip the Command round-trip
-        // and guarantee Simulate is never called a second time this tick.
+        // Update SyncVars
         if (isServer)
         {
+            // Host: write directly
             _syncPos = transform.position;
             _syncYaw = transform.eulerAngles.y;
             _syncCrouching = _crouching;
         }
         else
         {
-            // Send inputs to server for authoritative re-simulation
-            CmdSendInput(_moveInput, jumpThisTick, _crouching, _sprinting,
-                         transform.eulerAngles.y);
+            // Client: send position to server
+            CmdUpdatePosition(transform.position, transform.eulerAngles.y, _crouching);
         }
     }
 
@@ -288,7 +276,7 @@ public class PlayerController : NetworkBehaviour
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  Movement simulation  (identical logic on local client AND server)
+    //  Movement simulation  (runs locally on each client)
     // ══════════════════════════════════════════════════════════════════════════
 
     void Simulate(Vector2 move, bool jump, bool crouch, bool sprint, ref float yVel)
@@ -297,7 +285,7 @@ public class PlayerController : NetworkBehaviour
 
         if (grounded && yVel < 0)
         {
-            yVel = -2f; // Keep grounded
+            yVel = -2f;
         }
 
         if (jump && grounded)
@@ -305,7 +293,6 @@ public class PlayerController : NetworkBehaviour
             yVel = Mathf.Sqrt(jumpHeight * 2f * gravity);
         }
 
-        // Only apply gravity when in the air
         if (!grounded)
         {
             yVel -= gravity * Time.deltaTime;
@@ -320,8 +307,9 @@ public class PlayerController : NetworkBehaviour
         motion.y = yVel;
         _cc.Move(motion * Time.deltaTime);
     }
+
     // ══════════════════════════════════════════════════════════════════════════
-    //  Crouch / capsule height  (runs on all clients for smooth visuals)
+    //  Crouch / capsule height
     // ══════════════════════════════════════════════════════════════════════════
 
     void UpdateCapsuleHeight(bool wantCrouch)
@@ -334,13 +322,12 @@ public class PlayerController : NetworkBehaviour
             float r = _cc.radius * 0.9f;
             float top = transform.position.y + standHeight - r;
             if (Physics.CheckSphere(new Vector3(transform.position.x, top, transform.position.z), r))
-                target = crouchHeight;   // blocked — stay crouched
+                target = crouchHeight;
         }
 
         _capsuleHeight = Mathf.Lerp(_capsuleHeight, target,
                                      Time.deltaTime * crouchTransitionSpeed);
 
-        // Only write to the CharacterController when it is actually enabled
         if (_cc.enabled)
         {
             _cc.height = _capsuleHeight;
@@ -357,29 +344,22 @@ public class PlayerController : NetworkBehaviour
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  Network  (Command + remote update)
+    //  Network Commands
     // ══════════════════════════════════════════════════════════════════════════
 
     /// <summary>
-    /// Owner → Server: deliver this frame's inputs.
-    /// The server re-simulates movement and pushes authoritative state via SyncVars.
-    /// Only called by non-host clients — hosts write SyncVars directly in LocalUpdate.
+    /// Client → Server: send current position (client-authoritative).
     /// </summary>
     [Command(requiresAuthority = true)]
-    void CmdSendInput(Vector2 move, bool jump, bool crouch, bool sprint, float yaw)
+    void CmdUpdatePosition(Vector3 pos, float yaw, bool crouch)
     {
-        transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-        UpdateCapsuleHeight(crouch);
-        Simulate(move, jump, crouch, sprint, ref _yVel);
-
-        _syncPos = transform.position;
+        _syncPos = pos;
         _syncYaw = yaw;
         _syncCrouching = crouch;
     }
 
     /// <summary>
-    /// Non-owning clients smoothly interpolate the player toward the server-
-    /// authoritative position received via SyncVars.
+    /// Non-owning clients smoothly interpolate toward SyncVar position.
     /// </summary>
     void RemoteUpdate()
     {
@@ -388,7 +368,7 @@ public class PlayerController : NetworkBehaviour
         transform.rotation = Quaternion.Slerp(transform.rotation,
                                                Quaternion.Euler(0f, _syncYaw, 0f), t);
 
-        // Visual crouch height for hit-box accuracy on remote clients
+        // Visual crouch height for remote players
         float target = _syncCrouching ? crouchHeight : standHeight;
         _capsuleHeight = Mathf.Lerp(_capsuleHeight, target,
                                      Time.deltaTime * crouchTransitionSpeed);
