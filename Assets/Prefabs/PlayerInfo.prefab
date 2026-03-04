@@ -65,5 +65,7 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
+  devPlayerName: DevPlayer2
+  devSteamID: 1001
   steamID: 0
   playerName: 

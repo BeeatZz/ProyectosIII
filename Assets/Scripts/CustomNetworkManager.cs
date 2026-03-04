@@ -1,28 +1,53 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Mirror;
+using System.Collections.Generic;
 
 public class CustomNetworkManager : NetworkManager
 {
     public string lobbySceneName = "LobbyScene";
     public string gameSceneName = "TestScene";
-
     public GameObject lobbyPlayerPrefab;
 
-    public override void OnServerSceneChanged(string sceneName)
-    {
-        base.OnServerSceneChanged(sceneName);
+    private Dictionary<NetworkConnectionToClient, PlayerData> playerData = new();
 
+    private struct PlayerData
+    {
+        public string playerName;
+        public ulong steamID;
+    }
+
+    public override void OnServerChangeScene(string newSceneName)
+    {
         foreach (NetworkConnectionToClient conn in NetworkServer.connections.Values)
         {
-            if (sceneName == lobbySceneName)
+            if (conn.identity != null)
             {
-                SpawnLobbyPlayer(conn);
-            }
-            else if (sceneName == gameSceneName)
-            {
-                SpawnGamePlayer(conn);
+                PlayerLobbyInfo info = conn.identity.GetComponent<PlayerLobbyInfo>();
+                if (info != null)
+                {
+                    playerData[conn] = new PlayerData
+                    {
+                        playerName = info.playerName,
+                        steamID = info.steamID
+                    };
+                    Debug.Log($"[NetworkManager] Saved player data: {info.playerName}");
+                }
+
+                NetworkServer.Destroy(conn.identity.gameObject);
             }
         }
+
+        base.OnServerChangeScene(newSceneName);
+    }
+
+    public override void OnServerAddPlayer(NetworkConnectionToClient conn)
+    {
+        string scene = SceneManager.GetActiveScene().name;
+        if (scene == lobbySceneName)
+            SpawnLobbyPlayer(conn);
+        else if (scene == gameSceneName)
+            SpawnGamePlayer(conn);
     }
 
     private void SpawnLobbyPlayer(NetworkConnectionToClient conn)
@@ -31,7 +56,9 @@ public class CustomNetworkManager : NetworkManager
             NetworkServer.Destroy(conn.identity.gameObject);
 
         GameObject lobbyPlayer = Instantiate(lobbyPlayerPrefab);
-        NetworkServer.AddPlayerForConnection(conn, lobbyPlayer);
+        bool success = NetworkServer.AddPlayerForConnection(conn, lobbyPlayer);
+        if (!success)
+            Destroy(lobbyPlayer);
     }
 
     private void SpawnGamePlayer(NetworkConnectionToClient conn)
@@ -40,21 +67,33 @@ public class CustomNetworkManager : NetworkManager
             NetworkServer.Destroy(conn.identity.gameObject);
 
         Transform startPos = GetStartPosition();
-        Vector3 spawnPos = startPos != null ? startPos.position : Vector3.zero;
+        GameObject player = Instantiate(
+            playerPrefab,
+            startPos != null ? startPos.position : Vector3.zero,
+            Quaternion.identity
+        );
 
-        GameObject player = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
-        NetworkServer.AddPlayerForConnection(conn, player);
+        if (playerData.TryGetValue(conn, out PlayerData data))
+        {
+            PlayerLobbyInfo info = player.GetComponent<PlayerLobbyInfo>();
+            if (info != null)
+            {
+                info.steamID = data.steamID;
+                info.playerName = data.playerName;
+                Debug.Log($"[NetworkManager] Restored player data: {data.playerName}");
+            }
+
+            playerData.Remove(conn);
+        }
+
+        bool success = NetworkServer.AddPlayerForConnection(conn, player);
+        if (!success)
+            Destroy(player);
     }
 
-    public override void OnServerAddPlayer(NetworkConnectionToClient conn)
+    public override void OnServerDisconnect(NetworkConnectionToClient conn)
     {
-        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == lobbySceneName)
-        {
-            SpawnLobbyPlayer(conn);
-        }
-        else if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == gameSceneName)
-        {
-            SpawnGamePlayer(conn);
-        }
+        playerData.Remove(conn); 
+        base.OnServerDisconnect(conn);
     }
 }
