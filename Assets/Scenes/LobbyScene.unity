@@ -1010,7 +1010,7 @@ MonoBehaviour:
   syncDirection: 0
   syncMode: 0
   syncInterval: 0
-  gameSceneName: TestScene
+  gameSceneName: ColocacionObjetos3D
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -204,7 +204,7 @@ MonoBehaviour:
   offlineScene: 
   onlineScene: Assets/Scenes/LobbyScene.unity
   offlineSceneLoadDelay: 0
-  transport: {fileID: 37139265}
+  transport: {fileID: 968003946}
   networkAddress: 127.0.0.1
   maxConnections: 100
   disconnectInactiveConnections: 0
@@ -231,7 +231,7 @@ MonoBehaviour:
   evaluationInterval: 3
   timeInterpolationGui: 0
   lobbySceneName: LobbyScene
-  gameSceneName: TestScene
+  gameSceneName: ColocacionObjetos3D
   lobbyPlayerPrefab: {fileID: 6666891757812529010, guid: 6f81154a6c7424846b8c978b62bf6ca1, type: 3}
 --- !u!1 &63768650
 GameObject:
@@ -404,7 +404,7 @@ MonoBehaviour:
   maxPlayers: 4
   lobbySceneName: LobbyScene
   inviteAction: {fileID: 8929633207305642184, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  useSteam: 1
+  useSteam: 0
   devHostAddress: 127.0.0.1
 --- !u!4 &331249593
 Transform:

@@ -6,7 +6,7 @@ using System.Collections.Generic;
 public class CustomNetworkManager : NetworkManager
 {
     public string lobbySceneName = "LobbyScene";
-    public string gameSceneName = "TestScene";
+    public string gameSceneName = "ColocacionObjetos3D";
     public GameObject lobbyPlayerPrefab;
 
     private Dictionary<NetworkConnectionToClient, PlayerData> playerData = new();
