@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
+
 public class Inventory : NetworkBehaviour
 {
     [SerializeField] private int hotbarSize = 5;
-    [SerializeField] private Transform rightHandTransform;  
-    [SerializeField] private Transform twoHandedTransform;  
+    [SerializeField] private Transform rightHandTransform;
+    [SerializeField] private Transform twoHandedTransform;
 
     private readonly SyncList<uint> hotbarNetIds = new SyncList<uint>();
 
@@ -13,6 +14,18 @@ public class Inventory : NetworkBehaviour
     private uint twoHandedNetId = 0;
 
     private int activeSlotIndex = 0;
+
+    public Transform GetTransformByName(string name)
+    {
+        return name switch
+        {
+            "RightHand" => rightHandTransform,
+            "TwoHanded" => twoHandedTransform,
+            _ => null
+        };
+    }
+
+    public int GetActiveSlotIndex() => activeSlotIndex;
 
     public override void OnStartServer()
     {
@@ -38,13 +51,72 @@ public class Inventory : NetworkBehaviour
         switch (def.carryType)
         {
             case ItemCarryType.Hotbar:
-                TryAddToHotbar(item, itemIdentity);
+                TryPickUpHotbar(item, itemIdentity);
                 break;
 
             case ItemCarryType.TwoHanded:
                 TryPickUpTwoHanded(item, itemIdentity);
                 break;
         }
+    }
+
+    [Server]
+    private void TryPickUpHotbar(SceneItem item, NetworkIdentity itemIdentity)
+    {
+        // Two-handed active → drop it first, then pick up hotbar (if space exists)
+        if (twoHandedNetId != 0)
+        {
+            // Check there's a free hotbar slot before committing to the drop
+            int freeSlot = FindFreeHotbarSlot();
+            if (freeSlot == -1) return; // Hotbar full, block pickup
+
+            // Drop the two-handed item
+            if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity twoHandedNI))
+            {
+                SceneItem twoHandedItem = twoHandedNI.GetComponent<SceneItem>();
+                twoHandedItem?.Drop(twoHandedNI.transform.position, Vector3.zero);
+            }
+            twoHandedNetId = 0;
+
+            // Now pick up the hotbar item
+            item.PickUp(netIdentity, "RightHand");
+            hotbarNetIds[freeSlot] = itemIdentity.netId;
+            return;
+        }
+
+        // No two-handed active → just find a free slot
+        int slot = FindFreeHotbarSlot();
+        if (slot == -1) return; // Hotbar full, block pickup
+
+        item.PickUp(netIdentity, "RightHand");
+        hotbarNetIds[slot] = itemIdentity.netId;
+    }
+
+    [Server]
+    private void TryPickUpTwoHanded(SceneItem item, NetworkIdentity itemIdentity)
+    {
+        // Two-handed already held → drop it first
+        if (twoHandedNetId != 0)
+        {
+            if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity twoHandedNI))
+            {
+                SceneItem twoHandedItem = twoHandedNI.GetComponent<SceneItem>();
+                twoHandedItem?.Drop(twoHandedNI.transform.position, Vector3.zero);
+            }
+            twoHandedNetId = 0;
+        }
+
+        // Hotbar item active → it just stays silently in its slot, two-handed becomes active on top
+        item.PickUp(netIdentity, "TwoHanded");
+        twoHandedNetId = itemIdentity.netId;
+    }
+
+    [Server]
+    private int FindFreeHotbarSlot()
+    {
+        for (int i = 0; i < hotbarNetIds.Count; i++)
+            if (hotbarNetIds[i] == 0) return i;
+        return -1;
     }
 
     [Command]
@@ -103,7 +175,6 @@ public class Inventory : NetworkBehaviour
         UpdateHeldItemVisual();
     }
 
-
     public bool HasItemInHand(out SceneItem item)
     {
         item = null;
@@ -123,40 +194,11 @@ public class Inventory : NetworkBehaviour
         return item != null;
     }
 
-    /// <summary>
-    /// Returns the ItemDefinition of the item currently "in hand"
-    /// (active hotbar slot, or two-handed item — two-handed takes priority).
-    /// </summary>
     public ItemDef GetActiveItemDefinition()
     {
         if (HasTwoHandedItem(out SceneItem twoH)) return twoH.definition;
         if (HasItemInHand(out SceneItem hotbarItem)) return hotbarItem.definition;
         return null;
-    }
-
-    [Server]
-    private void TryAddToHotbar(SceneItem item, NetworkIdentity itemIdentity)
-    {
-        for (int i = 0; i < hotbarNetIds.Count; i++)
-        {
-            if (hotbarNetIds[i] == 0)
-            {
-                item.PickUp(netIdentity);
-                hotbarNetIds[i] = itemIdentity.netId;
-                return;
-            }
-        }
-    }
-
-    [Server]
-    private void TryPickUpTwoHanded(SceneItem item, NetworkIdentity itemIdentity)
-    {
-        if (twoHandedNetId != 0)
-        {
-            return;
-        }
-        item.PickUp(netIdentity);
-        twoHandedNetId = itemIdentity.netId;
     }
 
     private void OnTwoHandedItemChanged(uint oldId, uint newId)

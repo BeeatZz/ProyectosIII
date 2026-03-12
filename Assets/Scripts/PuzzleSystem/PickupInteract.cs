@@ -1,4 +1,4 @@
-using Mirror;
+﻿using Mirror;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -35,7 +35,6 @@ public class PickupInteractor : NetworkBehaviour
                 raycastOrigin = childCam.transform;
             else if (Camera.main != null)
                 raycastOrigin = Camera.main.transform;
-            
         }
 
         inputActions = new InputSystem_Actions();
@@ -43,8 +42,18 @@ public class PickupInteractor : NetworkBehaviour
 
         inputActions.Player.Interact.performed += OnInteractPerformed;
         inputActions.Player.Drop.performed += OnDropPerformed;
-        Debug.Log($"Interact action bound: {inputActions.Player.Interact.name}");
 
+        // Hotbar scroll
+        inputActions.Player.ScrollHotbar.performed += OnScrollHotbar;
+
+        // Hotbar number keys 1-5
+        inputActions.Player.HotbarSlot1.performed += _ => inventory.SetActiveSlot(0);
+        inputActions.Player.HotbarSlot2.performed += _ => inventory.SetActiveSlot(1);
+        inputActions.Player.HotbarSlot3.performed += _ => inventory.SetActiveSlot(2);
+        inputActions.Player.HotbarSlot4.performed += _ => inventory.SetActiveSlot(3);
+        //inputActions.Player.HotbarSlot5.performed += _ => inventory.SetActiveSlot(4);
+
+        Debug.Log($"Interact action bound: {inputActions.Player.Interact.name}");
     }
 
     public override void OnStopLocalPlayer()
@@ -55,13 +64,13 @@ public class PickupInteractor : NetworkBehaviour
         {
             inputActions.Player.Interact.performed -= OnInteractPerformed;
             inputActions.Player.Drop.performed -= OnDropPerformed;
+            inputActions.Player.ScrollHotbar.performed -= OnScrollHotbar;
             inputActions.Player.Disable();
             inputActions.Dispose();
             inputActions = null;
         }
     }
 
- 
     public void SetRaycastOrigin(Transform origin)
     {
         raycastOrigin = origin;
@@ -81,7 +90,23 @@ public class PickupInteractor : NetworkBehaviour
         TryDrop();
     }
 
-  
+    private void OnScrollHotbar(InputAction.CallbackContext ctx)
+    {
+        // Mouse scroll Y comes in as a float via the Vector2's Y axis.
+        // Positive = scroll up = go left in hotbar, negative = scroll down = go right.
+        float scrollValue = ctx.ReadValue<Vector2>().y;
+        if (scrollValue == 0f) return;
+
+        int currentSlot = inventory.GetActiveSlotIndex();
+        int hotbarSize = 5; // Should match Inventory.hotbarSize — consider exposing this if it changes
+
+        // Scroll up → previous slot, scroll down → next slot (Minecraft style)
+        int direction = scrollValue > 0 ? -1 : 1;
+        int newSlot = (currentSlot + direction + hotbarSize) % hotbarSize;
+
+        inventory.SetActiveSlot(newSlot);
+    }
+
     private void Update()
     {
         if (!isLocalPlayer) return;
@@ -90,7 +115,7 @@ public class PickupInteractor : NetworkBehaviour
 
     public void TryPickUp()
     {
-        Debug.Log($"TryPickUp called � item: {lookedAtItem}, isHeld: {lookedAtItem?.IsHeld}");
+        Debug.Log($"TryPickUp called — item: {lookedAtItem}, isHeld: {lookedAtItem?.IsHeld}");
         if (lookedAtItem == null) return;
         if (lookedAtItem.IsHeld) return;
         inventory.CmdPickUp(lookedAtItem.netIdentity);
@@ -148,8 +173,10 @@ public class PickupInteractor : NetworkBehaviour
 
         if (Physics.Raycast(origin.position, origin.forward, out RaycastHit itemHit, interactRange, itemLayer))
             lookedAtItem = itemHit.collider.GetComponent<SceneItem>();
+
         Debug.DrawRay(origin.position, origin.forward * interactRange,
-    lookedAtItem != null ? Color.green : Color.red);
+            lookedAtItem != null ? Color.green : Color.red);
+
         UpdatePrompts();
     }
 
@@ -174,7 +201,6 @@ public class PickupInteractor : NetworkBehaviour
         if (heldByOtherPrompt != null) heldByOtherPrompt.SetActive(lookingAtHeldItem);
     }
 
- 
     private Transform GetRaycastOrigin() => raycastOrigin != null ? raycastOrigin : transform;
 
     private void OnDrawGizmosSelected()
