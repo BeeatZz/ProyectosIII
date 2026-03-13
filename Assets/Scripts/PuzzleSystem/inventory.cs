@@ -63,14 +63,11 @@ public class Inventory : NetworkBehaviour
     [Server]
     private void TryPickUpHotbar(SceneItem item, NetworkIdentity itemIdentity)
     {
-        // Two-handed active → drop it first, then pick up hotbar (if space exists)
         if (twoHandedNetId != 0)
         {
-            // Check there's a free hotbar slot before committing to the drop
             int freeSlot = FindFreeHotbarSlot();
-            if (freeSlot == -1) return; // Hotbar full, block pickup
+            if (freeSlot == -1) return; 
 
-            // Drop the two-handed item
             if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity twoHandedNI))
             {
                 SceneItem twoHandedItem = twoHandedNI.GetComponent<SceneItem>();
@@ -78,15 +75,13 @@ public class Inventory : NetworkBehaviour
             }
             twoHandedNetId = 0;
 
-            // Now pick up the hotbar item
             item.PickUp(netIdentity, "RightHand");
             hotbarNetIds[freeSlot] = itemIdentity.netId;
             return;
         }
 
-        // No two-handed active → just find a free slot
         int slot = FindFreeHotbarSlot();
-        if (slot == -1) return; // Hotbar full, block pickup
+        if (slot == -1) return;
 
         item.PickUp(netIdentity, "RightHand");
         hotbarNetIds[slot] = itemIdentity.netId;
@@ -95,7 +90,6 @@ public class Inventory : NetworkBehaviour
     [Server]
     private void TryPickUpTwoHanded(SceneItem item, NetworkIdentity itemIdentity)
     {
-        // Two-handed already held → drop it first
         if (twoHandedNetId != 0)
         {
             if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity twoHandedNI))
@@ -106,7 +100,6 @@ public class Inventory : NetworkBehaviour
             twoHandedNetId = 0;
         }
 
-        // Hotbar item active → it just stays silently in its slot, two-handed becomes active on top
         item.PickUp(netIdentity, "TwoHanded");
         twoHandedNetId = itemIdentity.netId;
     }
@@ -175,25 +168,30 @@ public class Inventory : NetworkBehaviour
         UpdateHeldItemVisual();
     }
 
+    public bool HasTwoHandedItem(out SceneItem item)
+    {
+        item = null;
+        if (twoHandedNetId == 0) return false;
+
+        var spawned = NetworkServer.active ? NetworkServer.spawned : NetworkClient.spawned;
+        if (spawned.TryGetValue(twoHandedNetId, out NetworkIdentity ni))
+            item = ni.GetComponent<SceneItem>();
+
+        return true; 
+    }
+
     public bool HasItemInHand(out SceneItem item)
     {
         item = null;
         uint netId = hotbarNetIds[activeSlotIndex];
         if (netId == 0) return false;
-        if (NetworkServer.spawned.TryGetValue(netId, out NetworkIdentity ni))
-            item = ni.GetComponent<SceneItem>();
-        return item != null;
-    }
 
-    public bool HasTwoHandedItem(out SceneItem item)
-    {
-        item = null;
-        if (twoHandedNetId == 0) return false;
-        if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity ni))
+        var spawned = NetworkServer.active ? NetworkServer.spawned : NetworkClient.spawned;
+        if (spawned.TryGetValue(netId, out NetworkIdentity ni))
             item = ni.GetComponent<SceneItem>();
-        return item != null;
-    }
 
+        return true;
+    }
     public ItemDef GetActiveItemDefinition()
     {
         if (HasTwoHandedItem(out SceneItem twoH)) return twoH.definition;

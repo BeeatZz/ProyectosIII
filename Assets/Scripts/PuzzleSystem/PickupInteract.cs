@@ -43,15 +43,12 @@ public class PickupInteractor : NetworkBehaviour
         inputActions.Player.Interact.performed += OnInteractPerformed;
         inputActions.Player.Drop.performed += OnDropPerformed;
 
-        // Hotbar scroll
         inputActions.Player.ScrollHotbar.performed += OnScrollHotbar;
 
-        // Hotbar number keys 1-5
         inputActions.Player.HotbarSlot1.performed += _ => inventory.SetActiveSlot(0);
         inputActions.Player.HotbarSlot2.performed += _ => inventory.SetActiveSlot(1);
         inputActions.Player.HotbarSlot3.performed += _ => inventory.SetActiveSlot(2);
         inputActions.Player.HotbarSlot4.performed += _ => inventory.SetActiveSlot(3);
-        //inputActions.Player.HotbarSlot5.performed += _ => inventory.SetActiveSlot(4);
 
         Debug.Log($"Interact action bound: {inputActions.Player.Interact.name}");
     }
@@ -92,15 +89,12 @@ public class PickupInteractor : NetworkBehaviour
 
     private void OnScrollHotbar(InputAction.CallbackContext ctx)
     {
-        // Mouse scroll Y comes in as a float via the Vector2's Y axis.
-        // Positive = scroll up = go left in hotbar, negative = scroll down = go right.
         float scrollValue = ctx.ReadValue<Vector2>().y;
         if (scrollValue == 0f) return;
 
         int currentSlot = inventory.GetActiveSlotIndex();
-        int hotbarSize = 5; // Should match Inventory.hotbarSize — consider exposing this if it changes
+        int hotbarSize = 5; 
 
-        // Scroll up → previous slot, scroll down → next slot (Minecraft style)
         int direction = scrollValue > 0 ? -1 : 1;
         int newSlot = (currentSlot + direction + hotbarSize) % hotbarSize;
 

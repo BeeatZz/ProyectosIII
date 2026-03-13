@@ -21,7 +21,6 @@ public class SceneItem : NetworkBehaviour
         SetPhysicsEnabled(false);
         netIdentity.RemoveClientAuthority();
         netIdentity.AssignClientAuthority(holder.connectionToClient);
-
         RpcOnPickedUp(holder.netId, targetParentName);
     }
 
@@ -32,7 +31,6 @@ public class SceneItem : NetworkBehaviour
         {
             Inventory inv = playerIdentity.GetComponent<Inventory>();
             Transform targetParent = inv.GetTransformByName(parentName);
-
             if (targetParent != null)
             {
                 transform.SetParent(targetParent, false);
@@ -49,21 +47,41 @@ public class SceneItem : NetworkBehaviour
     {
         netIdentity.RemoveClientAuthority();
         holderNetId = 0;
+
         transform.SetParent(null);
         transform.position = dropPosition;
+
         SetPhysicsEnabled(true);
-        rb.linearVelocity = (forwardDirection.normalized * 2f) + (Vector3.up * 1f);
-        RpcOnDropped(dropPosition);
+        ToggleNetworkSync(true);
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+            rb.WakeUp(); 
+            rb.linearVelocity = (forwardDirection.normalized * 2f) + (Vector3.up * 1f);
+        }
+
+        RpcOnDropped(dropPosition, forwardDirection);
     }
 
     [ClientRpc]
-    private void RpcOnDropped(Vector3 position)
+    private void RpcOnDropped(Vector3 position, Vector3 forward)
     {
         transform.SetParent(null);
         transform.position = position;
+
         SetRendererEnabled(true);
         SetPhysicsEnabled(true);
         ToggleNetworkSync(true);
+
+        if (rb != null)
+        {
+            rb.isKinematic = false;
+            rb.useGravity = true;
+            rb.WakeUp();
+            rb.linearVelocity = (forward.normalized * 2f) + (Vector3.up * 2f);
+        }
     }
 
     private void ToggleNetworkSync(bool enabled)
@@ -85,5 +103,5 @@ public class SceneItem : NetworkBehaviour
         foreach (Renderer r in itemRenderers) if (r != null) r.enabled = enabled;
     }
 
-    private void OnHolderChanged(uint old, uint newId) { if (newId == 0) SetPhysicsEnabled(true); }
+    private void OnHolderChanged(uint old, uint newId) { }
 }
