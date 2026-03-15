@@ -15,16 +15,24 @@ public class CambiarColor : MonoBehaviour
     private Color colorInicioBoton;
     private Color colorInicioBotonFondo;
     private bool ColorInicio = false;
+    private bool FuenteInicio = false;
+
     public Button botonTexto;
+    public TMP_FontAsset nuevaFuente;
+    private TMP_FontAsset antiguaFuente;
 
 
     private void Start()
     {
-        // grabar colores por defecto
+        // guardar colores por defecto
         colorInicioCambio1 = cambio1.GetComponent<MeshRenderer>().material.color;
         colorInicioCambio2 = cambio2.GetComponent<MeshRenderer>().material.color;
         colorInicioBoton = botonTexto.GetComponentInChildren<TextMeshProUGUI>().color;
         colorInicioBotonFondo = botonTexto.image.color;
+
+        //guardar fuente por defecto
+        antiguaFuente = botonTexto.GetComponentInChildren<TextMeshProUGUI>().font;
+
     }
 
 
@@ -49,4 +57,18 @@ public class CambiarColor : MonoBehaviour
 
     }
 
+    public void cambiarFuente()
+    {
+        if (FuenteInicio == false)
+        {
+            botonTexto.GetComponentInChildren<TextMeshProUGUI>().font = nuevaFuente;
+            FuenteInicio = true;
+        }
+        else
+        {
+            botonTexto.GetComponentInChildren<TextMeshProUGUI>().font = antiguaFuente;
+            FuenteInicio = false;
+        }
+
+    }
 }
