@@ -15,6 +15,7 @@ public class CambiarColor : MonoBehaviour
     private Color colorInicioBoton;
     private Color colorInicioBotonFondo;
     private bool ColorInicio = false;
+    private bool ColorBotonInicio = false;
     private bool FuenteInicio = false;
 
     public Button botonTexto;
@@ -42,19 +43,34 @@ public class CambiarColor : MonoBehaviour
         {
             cambio1.GetComponent<MeshRenderer>().material.color = materialdefecto.color;
             cambio2.GetComponent<MeshRenderer>().material.color = materialcambio.color;
-            botonTexto.image.color = materialcambio.color;
-            botonTexto.GetComponentInChildren<TextMeshProUGUI>().color = Color.green;
+
             ColorInicio = true;
         }
         else
         {
             cambio1.GetComponent<MeshRenderer>().material.color = colorInicioCambio1;
             cambio2.GetComponent<MeshRenderer>().material.color = colorInicioCambio2;
-            botonTexto.image.color = colorInicioBotonFondo;
-            botonTexto.GetComponentInChildren<TextMeshProUGUI>().color = colorInicioBoton;
+
             ColorInicio = false;
         }
 
+    }
+
+    public void cambiarColorBoton()
+    {
+        if(ColorBotonInicio == false)
+        {
+            botonTexto.image.color = materialcambio.color;
+            botonTexto.GetComponentInChildren<TextMeshProUGUI>().color = Color.green;
+            ColorBotonInicio = true;
+        }
+
+        else
+        {
+            botonTexto.image.color = colorInicioBotonFondo;
+            botonTexto.GetComponentInChildren<TextMeshProUGUI>().color = colorInicioBoton;
+            ColorBotonInicio = false;
+        }
     }
 
     public void cambiarFuente()
