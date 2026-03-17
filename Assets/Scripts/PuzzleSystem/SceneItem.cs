@@ -38,6 +38,7 @@ public class SceneItem : NetworkBehaviour
                 transform.localRotation = Quaternion.identity;
             }
         }
+        SetPhysicsEnabled(false); 
         SetRendererEnabled(false);
         ToggleNetworkSync(false);
     }
@@ -47,21 +48,17 @@ public class SceneItem : NetworkBehaviour
     {
         netIdentity.RemoveClientAuthority();
         holderNetId = 0;
-
         transform.SetParent(null);
         transform.position = dropPosition;
-
         SetPhysicsEnabled(true);
         ToggleNetworkSync(true);
-
         if (rb != null)
         {
             rb.isKinematic = false;
             rb.useGravity = true;
-            rb.WakeUp(); 
-            rb.linearVelocity = (forwardDirection.normalized * 2f) + (Vector3.up * 1f);
+            rb.WakeUp();
+            rb.linearVelocity = (forwardDirection.normalized * 2f) + (Vector3.up * 2f);
         }
-
         RpcOnDropped(dropPosition, forwardDirection);
     }
 
@@ -70,11 +67,9 @@ public class SceneItem : NetworkBehaviour
     {
         transform.SetParent(null);
         transform.position = position;
-
         SetRendererEnabled(true);
         SetPhysicsEnabled(true);
         ToggleNetworkSync(true);
-
         if (rb != null)
         {
             rb.isKinematic = false;
@@ -83,6 +78,8 @@ public class SceneItem : NetworkBehaviour
             rb.linearVelocity = (forward.normalized * 2f) + (Vector3.up * 2f);
         }
     }
+
+    public void SetPhysicsState(bool enabled) => SetPhysicsEnabled(enabled);
 
     private void ToggleNetworkSync(bool enabled)
     {

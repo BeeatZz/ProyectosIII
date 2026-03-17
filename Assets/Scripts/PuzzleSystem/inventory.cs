@@ -66,7 +66,7 @@ public class Inventory : NetworkBehaviour
         if (twoHandedNetId != 0)
         {
             int freeSlot = FindFreeHotbarSlot();
-            if (freeSlot == -1) return; 
+            if (freeSlot == -1) return;
 
             if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity twoHandedNI))
             {
@@ -177,7 +177,7 @@ public class Inventory : NetworkBehaviour
         if (spawned.TryGetValue(twoHandedNetId, out NetworkIdentity ni))
             item = ni.GetComponent<SceneItem>();
 
-        return true; 
+        return true;
     }
 
     public bool HasItemInHand(out SceneItem item)
@@ -192,6 +192,7 @@ public class Inventory : NetworkBehaviour
 
         return true;
     }
+
     public ItemDef GetActiveItemDefinition()
     {
         if (HasTwoHandedItem(out SceneItem twoH)) return twoH.definition;
@@ -225,6 +226,10 @@ public class Inventory : NetworkBehaviour
             ni.transform.SetParent(parent, false);
             ni.transform.localPosition = Vector3.zero;
             ni.transform.localRotation = Quaternion.identity;
+
+          
+            SceneItem item = ni.GetComponent<SceneItem>();
+            item?.SetPhysicsState(false);
         }
     }
 }
