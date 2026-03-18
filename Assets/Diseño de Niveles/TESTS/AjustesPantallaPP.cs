@@ -22,13 +22,13 @@ public class AjustesPantallaPP : MonoBehaviour
     {
         if(activado == false)
         {
-            colorAdjustments.contrast.value = -50f;
+            colorAdjustments.contrast.value = 100f;
             activado = true;
         }
         
         else
         {
-            colorAdjustments.contrast.value = 50f;
+            colorAdjustments.contrast.value = 0f;
             activado = false;
         }
     }
