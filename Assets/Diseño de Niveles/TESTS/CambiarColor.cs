@@ -45,7 +45,8 @@ public class CambiarColor : MonoBehaviour
         colorInicioCambio1 = cambio1.GetComponent<MeshRenderer>().material.color;
         colorInicioCambio2 = cambio2.GetComponent<MeshRenderer>().material.color;
         */
-        colorInicioslider = slider.fillRect.GetComponent<Image>().color;
+        
+        //colorInicioslider = slider.fillRect.GetComponent<Image>().color;
         colorInicioBoton = botonColorBlind.GetComponentInChildren<TextMeshProUGUI>().color;
         colorInicioBotonFondo = botonColorBlind.image.color;
 
