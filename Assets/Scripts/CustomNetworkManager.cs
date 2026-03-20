@@ -6,7 +6,7 @@ using System.Collections.Generic;
 public class CustomNetworkManager : NetworkManager
 {
     public string lobbySceneName = "LobbyScene";
-    public string gameSceneName = "ColocacionObjetos3D";
+    public List<string> gameSceneNames = new List<string> { "ColocacionObjetos3D", "Mina" };
     public GameObject lobbyPlayerPrefab;
 
     private Dictionary<NetworkConnectionToClient, PlayerData> playerData = new();
@@ -17,9 +17,17 @@ public class CustomNetworkManager : NetworkManager
         public ulong steamID;
     }
 
+    public override void Awake()
+    {
+        base.Awake();
+        autoCreatePlayer = false;
+    }
+
     public override void OnServerChangeScene(string newSceneName)
     {
-        foreach (NetworkConnectionToClient conn in NetworkServer.connections.Values)
+        var connections = new List<NetworkConnectionToClient>(NetworkServer.connections.Values);
+
+        foreach (NetworkConnectionToClient conn in connections)
         {
             if (conn.identity != null)
             {
@@ -31,9 +39,7 @@ public class CustomNetworkManager : NetworkManager
                         playerName = info.playerName,
                         steamID = info.steamID
                     };
-                    Debug.Log($"[NetworkManager] Saved player data: {info.playerName}");
                 }
-
                 NetworkServer.Destroy(conn.identity.gameObject);
             }
         }
@@ -41,12 +47,26 @@ public class CustomNetworkManager : NetworkManager
         base.OnServerChangeScene(newSceneName);
     }
 
+    public override void OnServerSceneChanged(string sceneName)
+    {
+        base.OnServerSceneChanged(sceneName);
+
+        foreach (NetworkConnectionToClient conn in NetworkServer.connections.Values)
+        {
+            if (conn.identity == null)
+            {
+                OnServerAddPlayer(conn);
+            }
+        }
+    }
+
     public override void OnServerAddPlayer(NetworkConnectionToClient conn)
     {
         string scene = SceneManager.GetActiveScene().name;
+
         if (scene == lobbySceneName)
             SpawnLobbyPlayer(conn);
-        else if (scene == gameSceneName)
+        else if (gameSceneNames.Contains(scene))
             SpawnGamePlayer(conn);
     }
 
@@ -63,6 +83,7 @@ public class CustomNetworkManager : NetworkManager
 
     private void SpawnGamePlayer(NetworkConnectionToClient conn)
     {
+
         if (conn.identity != null)
             NetworkServer.Destroy(conn.identity.gameObject);
 
@@ -80,9 +101,7 @@ public class CustomNetworkManager : NetworkManager
             {
                 info.steamID = data.steamID;
                 info.playerName = data.playerName;
-                Debug.Log($"[NetworkManager] Restored player data: {data.playerName}");
             }
-
             playerData.Remove(conn);
         }
 
@@ -93,7 +112,7 @@ public class CustomNetworkManager : NetworkManager
 
     public override void OnServerDisconnect(NetworkConnectionToClient conn)
     {
-        playerData.Remove(conn); 
+        playerData.Remove(conn);
         base.OnServerDisconnect(conn);
     }
 }

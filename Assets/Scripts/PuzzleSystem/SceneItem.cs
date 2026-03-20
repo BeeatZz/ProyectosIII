@@ -1,7 +1,12 @@
 using Mirror;
 using UnityEngine;
 
+
 [RequireComponent(typeof(NetworkIdentity))]
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(BoxCollider))]
+[RequireComponent(typeof(NetworkRigidbodyUnreliable))]
+[RequireComponent(typeof(NetworkTransformUnreliable))]
 public class SceneItem : NetworkBehaviour
 {
     public ItemDef definition;
@@ -38,7 +43,7 @@ public class SceneItem : NetworkBehaviour
                 transform.localRotation = Quaternion.identity;
             }
         }
-        SetPhysicsEnabled(false); 
+        SetPhysicsEnabled(false);
         SetRendererEnabled(false);
         ToggleNetworkSync(false);
     }

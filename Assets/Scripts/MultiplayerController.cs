@@ -5,7 +5,7 @@ using UnityEngine.InputSystem;
 public class MultiplayerController : NetworkBehaviour
 {
 
-    [SerializeField] private Camera playerCamera;
+    [SerializeField] public Camera playerCamera;
     [SerializeField] private Transform cameraHolder;
     [SerializeField] private GameObject playerVisuals;
 
@@ -20,34 +20,44 @@ public class MultiplayerController : NetworkBehaviour
     [SerializeField][Range(0f, 20f)] private float lookSmoothing = 5f;
     [SerializeField] private PlayerNameplate namePlate;
 
+    [SerializeField] private GameObject flashlight;
+
+    [SerializeField] private Inventory inventory;
+    [SerializeField] private HotbarUI hotbarUI;
+
+    [SyncVar(hook = nameof(OnFlashlightStateChanged))]
+    private bool flashlightOn = false;
+
+    [SyncVar]
+    private float syncedCameraPitch;
+
     private InputSystem_Actions inputActions;
     private Vector2 rawLookDelta;
     private Vector2 smoothedLookDelta;
     private Vector2 moveInput;
-    private Vector3 currentVelocityXZ;   
-    private float verticalVelocity;    
+    private Vector3 currentVelocityXZ;
+    private float verticalVelocity;
     private bool jumpQueued;
     private bool isSprinting;
-    private float cameraPitch;           
+    private float cameraPitch;
     private CharacterController cc;
 
 
     private void Awake()
     {
         cc = GetComponent<CharacterController>();
-        namePlate = GetComponentInChildren<PlayerNameplate>(true); 
-
-       
+        namePlate = GetComponentInChildren<PlayerNameplate>(true);
     }
 
     public override void OnStartClient()
     {
         base.OnStartClient();
 
- 
         SetCameraActive(false);
+        ApplyFlashlightState(flashlightOn);
+        if (hotbarUI != null)
+            hotbarUI.gameObject.SetActive(isLocalPlayer);
     }
-
 
     public override void OnStartLocalPlayer()
     {
@@ -61,14 +71,25 @@ public class MultiplayerController : NetworkBehaviour
         inputActions = new InputSystem_Actions();
         inputActions.Player.Enable();
 
-
         inputActions.Player.Jump.performed += OnJump;
         inputActions.Player.Sprint.performed += _ => isSprinting = true;
         inputActions.Player.Sprint.canceled += _ => isSprinting = false;
+        inputActions.Player.Flashlight.performed += OnFlashlightToggle;
+
+        if (hotbarUI != null && inventory != null)
+            hotbarUI.Init(inventory, true);
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         namePlate.RefreshName();
+        if (TryGetComponent(out PuzzleInputHandler puzzleInput))
+        {
+            puzzleInput.onEnterPuzzle.AddListener(DisablePlayerControl);
+            puzzleInput.onEnterPuzzle.AddListener(HideLocalVisuals);
+
+            puzzleInput.onExitPuzzle.AddListener(EnablePlayerControl);
+            puzzleInput.onExitPuzzle.AddListener(ShowLocalVisuals);
+        }
     }
 
     public override void OnStopLocalPlayer()
@@ -80,6 +101,7 @@ public class MultiplayerController : NetworkBehaviour
             inputActions.Player.Jump.performed -= OnJump;
             inputActions.Player.Sprint.performed -= _ => isSprinting = true;
             inputActions.Player.Sprint.canceled -= _ => isSprinting = false;
+            inputActions.Player.Flashlight.performed -= OnFlashlightToggle;
             inputActions.Player.Disable();
             inputActions.Dispose();
             inputActions = null;
@@ -92,11 +114,18 @@ public class MultiplayerController : NetworkBehaviour
 
     private void Update()
     {
-        if (!isLocalPlayer) return;
+        if (isLocalPlayer)
+        {
+            ReadInput();
+            HandleLook();
+            HandleMovement();
+        }
+        else
+        {
+            cameraHolder.localEulerAngles = new Vector3(syncedCameraPitch, 0f, 0f);
+        }
 
-        ReadInput();
-        HandleLook();
-        HandleMovement();
+        TrackFlashlight();
     }
 
     private void ReadInput()
@@ -111,15 +140,16 @@ public class MultiplayerController : NetworkBehaviour
             ? Vector2.Lerp(smoothedLookDelta, rawLookDelta, Time.deltaTime * lookSmoothing * 10f)
             : rawLookDelta;
 
-        float yaw = smoothedLookDelta.x * mouseSensitivity;  
-        float pitch = -smoothedLookDelta.y * mouseSensitivity;   
+        float yaw = smoothedLookDelta.x * mouseSensitivity;
+        float pitch = -smoothedLookDelta.y * mouseSensitivity;
 
         transform.Rotate(Vector3.up, yaw, Space.World);
 
         cameraPitch = Mathf.Clamp(cameraPitch + pitch, -maxPitchAngle, maxPitchAngle);
         cameraHolder.localEulerAngles = new Vector3(cameraPitch, 0f, 0f);
-    }
 
+        syncedCameraPitch = cameraPitch;
+    }
 
     private void HandleMovement()
     {
@@ -128,7 +158,7 @@ public class MultiplayerController : NetworkBehaviour
         bool isGrounded = cc.isGrounded;
 
         if (isGrounded && verticalVelocity < 0f)
-            verticalVelocity = -2f;   
+            verticalVelocity = -2f;
 
         if (jumpQueued && isGrounded)
         {
@@ -156,6 +186,36 @@ public class MultiplayerController : NetworkBehaviour
         cc.Move(motion * Time.deltaTime);
     }
 
+    private void TrackFlashlight()
+    {
+        if (flashlight == null) return;
+
+        flashlight.transform.SetPositionAndRotation(
+            cameraHolder.position,
+            cameraHolder.rotation);
+    }
+
+    private void OnFlashlightToggle(InputAction.CallbackContext ctx)
+    {
+        CmdSetFlashlight(!flashlightOn);
+    }
+
+    [Command]
+    private void CmdSetFlashlight(bool state)
+    {
+        flashlightOn = state;
+    }
+
+    private void OnFlashlightStateChanged(bool oldState, bool newState)
+    {
+        ApplyFlashlightState(newState);
+    }
+
+    private void ApplyFlashlightState(bool state)
+    {
+        if (flashlight != null)
+            flashlight.SetActive(state);
+    }
 
     private void OnJump(InputAction.CallbackContext ctx)
     {
@@ -170,5 +230,29 @@ public class MultiplayerController : NetworkBehaviour
 
         if (playerCamera.TryGetComponent<AudioListener>(out var listener))
             listener.enabled = active;
+    }
+    public void DisablePlayerControl()
+    {
+        inputActions.Player.Disable();
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+    }
+
+    public void EnablePlayerControl()
+    {
+        inputActions.Player.Enable();
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+    public void HideLocalVisuals()
+    {
+        if (playerVisuals != null)
+            playerVisuals.SetActive(false);
+    }
+
+    public void ShowLocalVisuals()
+    {
+        if (playerVisuals != null)
+            playerVisuals.SetActive(true);
     }
 }

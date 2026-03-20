@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Mirror;
 using UnityEngine;
@@ -8,12 +9,20 @@ public class Inventory : NetworkBehaviour
     [SerializeField] private Transform rightHandTransform;
     [SerializeField] private Transform twoHandedTransform;
 
+    [SerializeField] private float dropDistance = 1.5f;
+    [SerializeField] private float dropHeightOffset = 1f;
+
+    [SerializeField] private float dropSpinStrength = 5f; 
+
     private readonly SyncList<uint> hotbarNetIds = new SyncList<uint>();
 
     [SyncVar(hook = nameof(OnTwoHandedItemChanged))]
     private uint twoHandedNetId = 0;
 
     private int activeSlotIndex = 0;
+
+    public event Action<int> OnActiveSlotChanged;
+    public event Action OnHotbarUpdated;
 
     public Transform GetTransformByName(string name)
     {
@@ -26,6 +35,19 @@ public class Inventory : NetworkBehaviour
     }
 
     public int GetActiveSlotIndex() => activeSlotIndex;
+    public int GetHotbarSize() => hotbarSize;
+
+    public ItemDef GetItemDefAtSlot(int index)
+    {
+        if (index < 0 || index >= hotbarNetIds.Count) return null;
+        uint netId = hotbarNetIds[index];
+        if (netId == 0) return null;
+
+        if (NetworkClient.spawned.TryGetValue(netId, out NetworkIdentity ni))
+            return ni.GetComponent<SceneItem>()?.definition;
+
+        return null;
+    }
 
     public override void OnStartServer()
     {
@@ -121,7 +143,8 @@ public class Inventory : NetworkBehaviour
         if (NetworkServer.spawned.TryGetValue(netId, out NetworkIdentity ni))
         {
             SceneItem item = ni.GetComponent<SceneItem>();
-            item?.Drop(dropPosition, forwardDirection);
+            item?.Drop(SafeDropPosition(dropPosition, forwardDirection), forwardDirection);
+            ApplyDropSpin(ni);
         }
 
         hotbarNetIds[activeSlotIndex] = 0;
@@ -135,7 +158,8 @@ public class Inventory : NetworkBehaviour
         if (NetworkServer.spawned.TryGetValue(twoHandedNetId, out NetworkIdentity ni))
         {
             SceneItem item = ni.GetComponent<SceneItem>();
-            item?.Drop(dropPosition, forwardDirection);
+            item?.Drop(SafeDropPosition(dropPosition, forwardDirection), forwardDirection);
+            ApplyDropSpin(ni);
         }
 
         twoHandedNetId = 0;
@@ -161,11 +185,34 @@ public class Inventory : NetworkBehaviour
         hotbarNetIds[activeSlotIndex] = 0;
     }
 
+    [Server]
+    private Vector3 SafeDropPosition(Vector3 origin, Vector3 forward)
+    {
+        Vector3 flatForward = new Vector3(forward.x, 0f, forward.z).normalized;
+        return origin + flatForward * dropDistance + Vector3.up * dropHeightOffset;
+    }
+
+    [Server]
+    private void ApplyDropSpin(NetworkIdentity ni)
+    {
+        Rigidbody rb = ni.GetComponent<Rigidbody>();
+        if (rb == null) return;
+
+        Vector3 randomSpin = new Vector3(
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(-1f, 1f)
+        ).normalized * dropSpinStrength;
+
+        rb.angularVelocity = randomSpin;
+    }
+
     public void SetActiveSlot(int index)
     {
         if (index < 0 || index >= hotbarSize) return;
         activeSlotIndex = index;
         UpdateHeldItemVisual();
+        OnActiveSlotChanged?.Invoke(activeSlotIndex);
     }
 
     public bool HasTwoHandedItem(out SceneItem item)
@@ -209,6 +256,8 @@ public class Inventory : NetworkBehaviour
     {
         if (index == activeSlotIndex)
             UpdateHeldItemVisual();
+
+        OnHotbarUpdated?.Invoke();
     }
 
     private void UpdateHeldItemVisual()
@@ -227,7 +276,6 @@ public class Inventory : NetworkBehaviour
             ni.transform.localPosition = Vector3.zero;
             ni.transform.localRotation = Quaternion.identity;
 
-          
             SceneItem item = ni.GetComponent<SceneItem>();
             item?.SetPhysicsState(false);
         }
