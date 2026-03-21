@@ -1,19 +1,21 @@
-using UnityEngine;
+ï»¿using UnityEngine;
+using Mirror;
 
 public class PauseManager : MonoBehaviour
 {
     public GameObject pausePanel;
     public GameObject confirmExitPanel;
 
-    private bool isPaused = false;
+    public static bool isPaused = false; 
 
     void Update()
     {
+        if (!NetworkClient.isConnected) return;
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (confirmExitPanel.activeSelf)
             {
-                // Si está el confirm abierto, lo cerramos primero
                 confirmExitPanel.SetActive(false);
             }
             else
@@ -28,7 +30,8 @@ public class PauseManager : MonoBehaviour
         isPaused = !isPaused;
         pausePanel.SetActive(isPaused);
 
-        Time.timeScale = isPaused ? 0f : 1f;
+        Cursor.lockState = isPaused ? CursorLockMode.None : CursorLockMode.Locked;
+        Cursor.visible = isPaused;
     }
 
     public void ResumeGame()
@@ -36,7 +39,9 @@ public class PauseManager : MonoBehaviour
         isPaused = false;
         pausePanel.SetActive(false);
         confirmExitPanel.SetActive(false);
-        Time.timeScale = 1f;
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     public void OpenExitConfirmation()

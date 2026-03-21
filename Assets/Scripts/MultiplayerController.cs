@@ -4,7 +4,6 @@ using UnityEngine.InputSystem;
 
 public class MultiplayerController : NetworkBehaviour
 {
-
     [SerializeField] public Camera playerCamera;
     [SerializeField] private Transform cameraHolder;
     [SerializeField] private GameObject playerVisuals;
@@ -42,6 +41,9 @@ public class MultiplayerController : NetworkBehaviour
     private float cameraPitch;
     private CharacterController cc;
 
+   
+    private System.Action<InputAction.CallbackContext> onSprintPerformed;
+    private System.Action<InputAction.CallbackContext> onSprintCanceled;
 
     private void Awake()
     {
@@ -72,8 +74,12 @@ public class MultiplayerController : NetworkBehaviour
         inputActions.Player.Enable();
 
         inputActions.Player.Jump.performed += OnJump;
-        inputActions.Player.Sprint.performed += _ => isSprinting = true;
-        inputActions.Player.Sprint.canceled += _ => isSprinting = false;
+
+        onSprintPerformed = _ => isSprinting = true;
+        onSprintCanceled = _ => isSprinting = false;
+        inputActions.Player.Sprint.performed += onSprintPerformed;
+        inputActions.Player.Sprint.canceled += onSprintCanceled;
+
         inputActions.Player.Flashlight.performed += OnFlashlightToggle;
 
         if (hotbarUI != null && inventory != null)
@@ -82,6 +88,7 @@ public class MultiplayerController : NetworkBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
         namePlate.RefreshName();
+
         if (TryGetComponent(out PuzzleInputHandler puzzleInput))
         {
             puzzleInput.onEnterPuzzle.AddListener(DisablePlayerControl);
@@ -95,12 +102,22 @@ public class MultiplayerController : NetworkBehaviour
     public override void OnStopLocalPlayer()
     {
         base.OnStopLocalPlayer();
+        CleanupInputActions();
+    }
 
+   
+    private void OnDestroy()
+    {
+        CleanupInputActions();
+    }
+
+    private void CleanupInputActions()
+    {
         if (inputActions != null)
         {
             inputActions.Player.Jump.performed -= OnJump;
-            inputActions.Player.Sprint.performed -= _ => isSprinting = true;
-            inputActions.Player.Sprint.canceled -= _ => isSprinting = false;
+            inputActions.Player.Sprint.performed -= onSprintPerformed;
+            inputActions.Player.Sprint.canceled -= onSprintCanceled;
             inputActions.Player.Flashlight.performed -= OnFlashlightToggle;
             inputActions.Player.Disable();
             inputActions.Dispose();
@@ -111,9 +128,11 @@ public class MultiplayerController : NetworkBehaviour
         Cursor.visible = true;
     }
 
-
     private void Update()
     {
+        if (PauseManager.isPaused)
+            return;
+
         if (isLocalPlayer)
         {
             ReadInput();
@@ -154,7 +173,6 @@ public class MultiplayerController : NetworkBehaviour
     private void HandleMovement()
     {
         float gravity = Physics.gravity.y * gravityMultiplier;
-
         bool isGrounded = cc.isGrounded;
 
         if (isGrounded && verticalVelocity < 0f)
@@ -231,6 +249,7 @@ public class MultiplayerController : NetworkBehaviour
         if (playerCamera.TryGetComponent<AudioListener>(out var listener))
             listener.enabled = active;
     }
+
     public void DisablePlayerControl()
     {
         inputActions.Player.Disable();
@@ -244,6 +263,7 @@ public class MultiplayerController : NetworkBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
+
     public void HideLocalVisuals()
     {
         if (playerVisuals != null)

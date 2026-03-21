@@ -20,29 +20,38 @@ public class WireTile : NetworkBehaviour
     };
 
     [SerializeField] private WireType wireType;
-
     [SerializeField] private float lerpSpeed = 3f;
 
     [SyncVar(hook = nameof(OnRotationIndexChanged))]
     private int rotationIndex = 0;
 
-    private Quaternion targetRotation;
+    private Quaternion targetRotation = Quaternion.identity;
     private WirePuzzleController controller;
     private bool initialized = false;
 
-    public void Init(WirePuzzleController owner, int startingRotationIndex = 0)
+    public void Init(WirePuzzleController owner, int startingRotationIndex = -1)
     {
-        if (initialized) return; 
+        if (initialized) return;
         initialized = true;
 
         controller = owner;
 
-        if (isServer)
+        if (isServer && startingRotationIndex >= 0)
         {
             rotationIndex = startingRotationIndex;
         }
 
-        targetRotation = IndexToRotation(startingRotationIndex);
+        targetRotation = IndexToRotation(rotationIndex);
+        transform.localRotation = targetRotation;
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+
+        if (isServer) return; 
+
+        targetRotation = IndexToRotation(rotationIndex);
         transform.localRotation = targetRotation;
     }
 
@@ -107,7 +116,6 @@ public class WireTile : NetworkBehaviour
     private void OnDrawGizmosSelected()
     {
         int steps;
-
         if (Application.isPlaying)
         {
             steps = rotationIndex;
@@ -124,9 +132,9 @@ public class WireTile : NetworkBehaviour
         Vector3 pos = transform.position;
 
         DrawGizmoArrow(pos, transform.TransformDirection(Vector3.forward), (mask & 1) != 0, arrowLength);
-        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.up), (mask & 2) != 0, arrowLength);      
-        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.back), (mask & 4) != 0, arrowLength);    
-        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.down), (mask & 8) != 0, arrowLength);    
+        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.up), (mask & 2) != 0, arrowLength);
+        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.back), (mask & 4) != 0, arrowLength);
+        DrawGizmoArrow(pos, transform.TransformDirection(Vector3.down), (mask & 8) != 0, arrowLength);
     }
 
     private void DrawGizmoArrow(Vector3 origin, Vector3 direction, bool open, float length)

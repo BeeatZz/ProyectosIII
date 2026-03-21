@@ -42,7 +42,6 @@ public class PickupInteractor : NetworkBehaviour
 
         inputActions.Player.Interact.performed += OnInteractPerformed;
         inputActions.Player.Drop.performed += OnDropPerformed;
-
         inputActions.Player.ScrollHotbar.performed += OnScrollHotbar;
 
         inputActions.Player.HotbarSlot1.performed += _ => inventory.SetActiveSlot(0);
@@ -56,7 +55,17 @@ public class PickupInteractor : NetworkBehaviour
     public override void OnStopLocalPlayer()
     {
         base.OnStopLocalPlayer();
+        CleanupInputActions();
+    }
 
+   
+    private void OnDestroy()
+    {
+        CleanupInputActions();
+    }
+
+    private void CleanupInputActions()
+    {
         if (inputActions != null)
         {
             inputActions.Player.Interact.performed -= OnInteractPerformed;
@@ -75,6 +84,8 @@ public class PickupInteractor : NetworkBehaviour
 
     private void OnInteractPerformed(InputAction.CallbackContext ctx)
     {
+        if (this == null || !isLocalPlayer) return;
+
         Debug.Log("Interact pressed");
         if (lookedAtInteractable != null)
             TryInteract();
@@ -84,16 +95,20 @@ public class PickupInteractor : NetworkBehaviour
 
     private void OnDropPerformed(InputAction.CallbackContext ctx)
     {
+        if (this == null || !isLocalPlayer) return;
+
         TryDrop();
     }
 
     private void OnScrollHotbar(InputAction.CallbackContext ctx)
     {
+        if (this == null || !isLocalPlayer) return;
+
         float scrollValue = ctx.ReadValue<Vector2>().y;
         if (scrollValue == 0f) return;
 
         int currentSlot = inventory.GetActiveSlotIndex();
-        int hotbarSize = 5; 
+        int hotbarSize = 5;
 
         int direction = scrollValue > 0 ? -1 : 1;
         int newSlot = (currentSlot + direction + hotbarSize) % hotbarSize;

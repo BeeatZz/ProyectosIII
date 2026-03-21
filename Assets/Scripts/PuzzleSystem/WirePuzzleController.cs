@@ -24,10 +24,25 @@ public class WirePuzzleController : NetworkBehaviour
 
     public override void OnStartServer()
     {
+        base.OnStartServer();
+
         for (int i = 0; i < tiles.Length; i++)
         {
             int startRot = randomiseOnStart ? Random.Range(0, 4) : 0;
             tiles[i].Init(this, startRot);
+        }
+    }
+
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+
+        if (isServer) return; 
+
+       
+        for (int i = 0; i < tiles.Length; i++)
+        {
+            tiles[i].Init(this);
         }
     }
 
@@ -42,7 +57,6 @@ public class WirePuzzleController : NetworkBehaviour
     {
         var visited = new bool[tiles.Length];
         var queue = new Queue<int>();
-
         queue.Enqueue(startTileIndex);
         visited[startTileIndex] = true;
 
@@ -78,6 +92,7 @@ public class WirePuzzleController : NetworkBehaviour
                 }
             }
         }
+
         return false;
     }
 

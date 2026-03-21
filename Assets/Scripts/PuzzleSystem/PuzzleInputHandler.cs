@@ -8,7 +8,7 @@ public class PuzzleInputHandler : MonoBehaviour
 
     [SerializeField] private float raycastDistance = 50f;
     [SerializeField] private LayerMask tileLayer;
-    [SerializeField] private KeyCode exitKey = KeyCode.Escape;
+    [SerializeField] private KeyCode exitKey = KeyCode.E;
 
     public UnityEvent onEnterPuzzle;
     public UnityEvent onExitPuzzle;
